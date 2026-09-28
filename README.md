@@ -39,3 +39,29 @@ The accelerator supports up to 32 concurrent data channels:
 ---
 
 ## Module Interfaces & Signal Map
++---------------------------------------+
+                 |            AXI4_Arbiter               |
+AXI4-Full Stream >|  [32-Channel Context Arbitration]    |< APB Slave (Config/Status)
+|                                       |
++---+-+---------------------------+-+---+
+| |                           | |
+| | BRAM IF                   | | CRC IF
+v v                           v v
++-------+                     +-------+
+| BRAM  |                     | CRC32 |
+| Memory|                     | Engine|
++-------+                     +-------+
+
+
+### Supported Protocols:
+* **AMBA AXI4-Full:** Address/Data burst write channels with configurable ID/Address width.
+* **AMBA APB Slave:** Register-mapped interface for reading final CRC checksums and configuring channel parameters.
+* **BRAM Interface:** Synchronous memory handshake with address decoding split into Channel ID (`CHAN_BITS`) and Word Index (`WORD_BITS`).
+
+---
+
+## Use Cases
+
+* **Storage Subsystems:** Offloading hardware CRC-32C computation for NVMe-oF and SATA protocol frames.
+* **Network Interface Cards (NIC):** High-speed Ethernet frame check sequence (FCS) verification.
+* **High-Frequency Interconnects:** Real-time data integrity validation across SoC bus
