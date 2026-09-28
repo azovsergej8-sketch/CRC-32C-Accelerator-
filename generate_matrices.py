@@ -8,7 +8,6 @@ target_folder = os.path.join(desktop, "CRC-32C Controller")
 os.makedirs(target_folder, exist_ok=True)
 
 def step_lfsr(reg: int, data_bit: int) -> int:
-    """Эмуляция 1 такта сдвига Galois LFSR для CRC-32C (LSB-first)."""
     fb = (reg ^ data_bit) & 1
     reg >>= 1
     if fb:
@@ -52,10 +51,6 @@ def generate_matrices(data_bits_count: int = 32):
     return rows_A, rows_B
 
 def generate_sv_function(width: int) -> str:
-    """
-    Генерирует текст SystemVerilog функции для вычисления CRC за 1 такт 
-    для ширин данных N = 32, 16 или 8 бит.
-    """
     rows_A, rows_B = generate_matrices(width)
     hex_digits_B = width // 4  # Определяем ширину hex-маски для входных данных (32->8, 16->4, 8->2)
 
@@ -68,8 +63,7 @@ def generate_sv_function(width: int) -> str:
     lines.append(f"    logic [31:0] next_crc;")
     lines.append(f"    begin")
 
-    # Генерируем 32 параллельных уравнения XOR
-    # В SystemVerilog унарный оператор '^' выполняет XOR-свертку (Reduction XOR)
+
     for i in range(32):
         mask_a = f"32'h{rows_A[i]:08X}"
         mask_b = f"{width}'h{rows_B[i]:0{hex_digits_B}X}"
@@ -83,12 +77,12 @@ def generate_sv_function(width: int) -> str:
 
 def generate_sv_module() -> str:
     """Генерирует законченный RTL модуль с подлючением интерфейса CRC_arbiter."""
-    # Генерируем функции для трех разных порций данных
+    
     func_32 = generate_sv_function(32)
     func_16 = generate_sv_function(16)
     func_8  = generate_sv_function(8)
 
-    # Формируем итоговый модуль SystemVerilog с использованием f-string шаблона
+    
     module_code = f"""// ============================================================================
 
 

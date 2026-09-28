@@ -91,64 +91,56 @@ module crc32c_engine (
   endfunction
 
   
-  // 1. Тракт управления (сдвиговый регистр флага valid)
-always_ff @(posedge clk or negedge rst_n) begin
-    if (!rst_n) begin
-        stg1_valid <= 1'b0;
-        stg2_valid <= 1'b0;
-        is_stall <= 1'b0;
-    end else if (!bus_if.stall) begin      // Если нет сигнала остановки шины
-      is_stall <= 1'b0;                        // Сигнал остановки шины сбрасывается
-      stg1_valid <= bus_if.valid;          // Входной сигнал valid на шине передается в 1-ю стадию
-      stg2_valid <= stg1_valid;            // Сдвиг на 2-ю стадию
-    end
-end
-
+// 1. Тракт управления
 logic stg1_valid;
-logic stg2_valid;
+logic stg2_valid, stg2_ready;
 logic{32:0} stg1_crc;
 logic[31:0] stg1_data;
 
 
-assign stg1_valid = bus_if.valid;
+assign bus_if.CRC_ready = !stg1_valid  || stg2_ready;
+assign stg2_ready = !bus_if.data_out_valid || bus_if.arbiter_ready;
+
+
 // 2. Тракт данных (вычислительные стадии)
 always_ff @(posedge clk) begin
-  if (!bus_if.stall) begin
-    //Переключение сигналов управления между стадиями
-    stg2_valid <= stg1_valid;
-    bus_if_data_out_ready <= stg2_valid;
-
-    // Стадия 1
-    if(stg1_valid) begin
-      case(byte_crc)
-        2'b00: begin
-          stg1_crc[31:0]  <= calc_crc32c_w8(bus_if.crc_in, bus_if.data_in[7:0]);
-          stg1_crc[32] <= 1'b0; 
-        end
-        2'b01: begin
-          stg1_crc[31:0]  <= calc_crc32c_w16(bus_if.crc_in, bus_if.data_in[15:0]);
-          stg1_crc[32] <= 1'b0; 
-        end
-        2'b10: begin
-          stg1_crc[31:0]  <= calc_crc32c_w16(bus_if.crc_in, bus_if.data_in[15:0]);
-          stg1_data <= bus_if.data_in[31:16];
-          stg1_crc[32] <= 1'b1;
-        end
-      endcase
-    end
+    if(!bus_if.stall) begin
+      // Стадия 1
+      if(bus_if.CRC_ready && bus_if.data_in_valid) begin
+        stg1_valid <= 1;
+        case(byte_crc)
+          2'b00: begin
+            stg1_crc[31:0]  <= calc_crc32c_w8(bus_if.crc_in, bus_if.data_in[7:0]);
+            stg1_crc[32] <= 1'b0; 
+          end
+          2'b01: begin
+            stg1_crc[31:0]  <= calc_crc32c_w16(bus_if.crc_in, bus_if.data_in[15:0]);
+            stg1_crc[32] <= 1'b0; 
+          end
+          2'b10: begin
+            stg1_crc[31:0]  <= calc_crc32c_w16(bus_if.crc_in, bus_if.data_in[15:0]);
+            stg1_data <= bus_if.data_in[31:16];
+            stg1_crc[32] <= 1'b1;
+          end
+        endcase
+      end else stg1_valid <= 0;
     
-    // Стадия 2
-    if(stg2_valid) begin
-      case(stg1_crc[32])
-        1'b0: begin
-          bus_if.crc_out <= stg1_crc[31:0];
-        end
-        1'b1: begin
-          bus_if.crc_out <= calc_crc32c_w16(stg1_crc[31:0], stg1_data);
-        end
-      endcase
-    end
-    end else if(bus_if.stall) begin
+      // Стадия 2
+      if(stg2_ready && stg1_valid) begin
+        bus_if.data_out_valid <= 1;
+        case(stg1_crc[32])
+          1'b0: begin
+            bus_if.crc_out <= stg1_crc[31:0];
+          end
+          1'b1: begin
+            bus_if.crc_out <= calc_crc32c_w16(stg1_crc[31:0], stg1_data);
+          end
+        endcase
+      end else if() begin
+        bus_if.data_out_valid <= 0;
+      end
+
+    end else begin
       bus_if.crc_out <= stg1_crc;
       case(stg1_crc[32])
       1'b0: begin
@@ -160,5 +152,5 @@ always_ff @(posedge clk) begin
       endcase
       bus_if_data_out_ready <= 1'b1;
     end
-  end
+end
 endmodule
