@@ -120,7 +120,7 @@ module arbiter #(
     logic length_stat;
     logic[CHAN_BITS-1:0] actv_chn_id;
     logic inactive_trsn;
-    logic inactive_bram_wr;
+    logic inactive_bram_wr_0, inactive_bram_wr_1, inactive_bram_wr_2, inactive_bram_wr_3, inactive_bram_wr_4, inactive_bram_wr_5, inactive_bram_wr_6, inactive_bram_wr_7;
 
 
     assign data_ready = axi4_full.WREADY && axi4_full.WVALID;
@@ -130,7 +130,14 @@ module arbiter #(
 
     //Сброс сигналов транзакции и данных для записи
     assign inactive_trsn = !addr_ready && data_ready && ((data_type == CRC) || length_stat);
-    assign inactive_bram_wr = if_bram.write_enable && (!data_ready || (data_type == CRC));
+    assign inactive_bram_wr_0 = if_bram_0.write_enable && (!data_ready || (data_type == CRC));
+    assign inactive_bram_wr_1 = if_bram_1.write_enable && (!data_ready || (data_type == CRC));
+    assign inactive_bram_wr_2 = if_bram_2.write_enable && (!data_ready || (data_type == CRC));
+    assign inactive_bram_wr_3 = if_bram_3.write_enable && (!data_ready || (data_type == CRC));
+    assign inactive_bram_wr_4 = if_bram_4.write_enable && (!data_ready || (data_type == CRC));
+    assign inactive_bram_wr_5 = if_bram_5.write_enable && (!data_ready || (data_type == CRC));
+    assign inactive_bram_wr_6 = if_bram_6.write_enable && (!data_ready || (data_type == CRC));
+    assign inactive_bram_wr_7 = if_bram_7.write_enable && (!data_ready || (data_type == CRC));
 
     // 2.2. Стадии чтения и вычисления
 
@@ -207,9 +214,22 @@ module arbiter #(
     assign inval_id_error = actual_pkg_id[AWADDR[ADDR_WIDTH-2 : ADDR_WIDTH-1-CHAN_BITS]][ID_BITS] && (actual_pkg_id[AWADDR[ADDR_WIDTH-2 : ADDR_WIDTH-1-CHAN_BITS]][WORD_BITS-1:0] != axi4_full.AWID);
     assign is_addr_crct = !actual_pkg_id[AWADDR[ADDR_WIDTH-2 : ADDR_WIDTH-1-CHAN_BITS]][ID_BITS] || (!inval_lgth_error && !inval_id_error);
 
+    //Логика смены состояний конвеера
+    logic apb_valid_data;
+    assign apb_valid_data = apb.PSEL && apb.PENABLE;
+    always_comb begin
+        case(state)
+            WORK: begin
+                if(apb.core_stall) next_state = STALL;
+            end
+            STALL: begin
+                if(apb_valid_data && apb.PWRITE && apb.PWDATA == 1) next_state = WORK;
+            end
+        endcase
+    end
     //3. Логика конвеера
     always_ff@(posedge if_clk.clk or negedge if_clk.rst_n) begin
-        if(rst_n) begin
+        if(!rst_n) begin
             axi4_full.AWREADY <= 1;
             actv_chn_id <= CHANNELS;
         end else begin
@@ -312,7 +332,16 @@ module arbiter #(
                     end
 
                     //Сброс сигнала готовности данных для записи
-                    if(inactive_bram_wr) if_bram.write_enable <= 0;
+                    unique case(1'b1)
+                        inactive_bram_wr_0: if_bram_0.write_enable <= 0;
+                        inactive_bram_wr_1: if_bram_1.write_enable <= 0;
+                        inactive_bram_wr_2: if_bram_2.write_enable <= 0;
+                        inactive_bram_wr_3: if_bram_3.write_enable <= 0;
+                        inactive_bram_wr_4: if_bram_4.write_enable <= 0;
+                        inactive_bram_wr_5: if_bram_5.write_enable <= 0;
+                        inactive_bram_wr_6: if_bram_6.write_enable <= 0;
+                        inactive_bram_wr_7: if_bram_7.write_enable <= 0;
+                    endcase
 
                     //Сброс флага наличия активной транзакции
                     if(inactive_trsn) begin
@@ -556,7 +585,7 @@ module arbiter #(
                     end
 
                     //Отправка данных
-                    if(apb.PREADY) begin
+                    if(!apb.PWRITE) begin
                         apb.PRDATA <= apb_answr_buffer[apb_buf_rd_ptr];
                         apb_buf_rd_ptr <= apb_buf_rd_ptr + 1;
                     end
