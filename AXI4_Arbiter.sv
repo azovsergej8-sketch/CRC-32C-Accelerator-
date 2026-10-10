@@ -27,7 +27,7 @@ module arbiter #(
         input logic[CHANNELS/GROUPS_NUM-1:0] channels_reg
     );
         logic[CHANNELS/GROUPS_NUM-1:0] single_hot_mask;
-        single_hot_mask = channels_reg && (~channels_reg + 1);
+        single_hot_mask = channels_reg & (~channels_reg + 1);
         return single_hot_mask;
     endfunction
 
